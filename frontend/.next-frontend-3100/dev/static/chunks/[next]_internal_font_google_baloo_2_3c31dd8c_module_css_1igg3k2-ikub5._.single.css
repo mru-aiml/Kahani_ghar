@@ -1,0 +1,20 @@
+/* [next]/internal/font/google/baloo_2_3c31dd8c.module.css [app-client] (css) */
+@font-face {
+  font-family: "Baloo 2 Fallback";
+  src: local(Arial);
+  ascent-override: 112.55%;
+  descent-override: 54.71%;
+  line-gap-override: 0.0%;
+  size-adjust: 95.78%;
+}
+
+.baloo_2_3c31dd8c-module___3OaJG__className {
+  font-family: "Baloo 2", "Baloo 2 Fallback";
+  font-style: normal;
+}
+
+.baloo_2_3c31dd8c-module___3OaJG__variable {
+  --font-baloo2: "Baloo 2", "Baloo 2 Fallback";
+}
+
+/*# sourceMappingURL=%5Bnext%5D_internal_font_google_baloo_2_3c31dd8c_module_css_1igg3k2-ikub5._.single.css.map*/

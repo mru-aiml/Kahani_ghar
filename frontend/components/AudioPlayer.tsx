@@ -56,7 +56,7 @@ export default function AudioPlayer({ sceneCount, currentScene, onSceneChange, s
     try {
       const result = await apiClient.post<{ success: true; data: { audioUrl: string } }>(
         "/tts",
-        { storyId, sceneIndex: currentScene, voice, language },
+        { storyId, sceneIndex: currentScene, voice, language, text: scenes[currentScene].text },
         { timeout: 60_000 }
       );
       setAudioUrl(result.data.audioUrl);

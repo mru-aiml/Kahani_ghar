@@ -16,14 +16,16 @@ export async function transcribe(req, res) {
 }
 export async function tts(req, res) {
   const input = ttsSchema.parse(req.body);
-  const story = await ownedStory(input.storyId, req.user.id);
-  const scene = story.structure.scenes[input.sceneIndex];
-  if (!scene) throw httpError(404, "NOT_FOUND", "Scene not found.");
+  // API-created stories are resolved from MongoDB. Local demo stories have a
+  // browser-generated id, so their scene text is sent explicitly instead.
+  const story = input.text ? null : await ownedStory(input.storyId, req.user.id);
+  const sceneText = input.text || story?.structure.scenes[input.sceneIndex]?.text;
+  if (!sceneText) throw httpError(404, "NOT_FOUND", "Scene not found.");
   await fs.mkdir(audioDirectory, { recursive: true });
-  const key = crypto.createHash("sha256").update(`${story.id}:${input.sceneIndex}:${input.voice}:${input.language || story.language}:${scene.text}`).digest("hex");
+  const key = crypto.createHash("sha256").update(`${input.storyId}:${input.sceneIndex}:${input.voice}:${input.language || story?.language}:${sceneText}`).digest("hex");
   const filename = `${key}.wav`;
   const filepath = path.join(audioDirectory, filename);
   let cached = true;
-  try { await fs.access(filepath); } catch { await fs.writeFile(filepath, await synthesizeSpeech({ text: scene.text, voice: input.voice, language: input.language || story.language })); cached = false; }
+  try { await fs.access(filepath); } catch { await fs.writeFile(filepath, await synthesizeSpeech({ text: sceneText, voice: input.voice, language: input.language || story?.language })); cached = false; }
   return success(res, { audioUrl: `${req.protocol}://${req.get("host")}/uploads/audio/${filename}`, cached, format: "wav", sampleRate: 44100 });
 }

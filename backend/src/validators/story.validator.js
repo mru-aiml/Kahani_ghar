@@ -13,4 +13,11 @@ export const createStorySchema = z.object({
   interactive: z.boolean().default(true)
 });
 export const branchStorySchema = z.object({ choice: z.string().min(1).max(200) });
-export const ttsSchema = z.object({ storyId: z.string().min(1), sceneIndex: z.number().int().min(0), voice: z.string().min(1).max(100).default("Pranav"), language: z.enum(languages).optional() });
+export const ttsSchema = z.object({
+  storyId: z.string().min(1),
+  sceneIndex: z.number().int().min(0),
+  voice: z.string().min(1).max(100).default("Pranav"),
+  language: z.enum(languages).optional(),
+  // Present for browser-only demo stories, which are not persisted in MongoDB.
+  text: z.string().min(1).max(2_000).optional()
+});

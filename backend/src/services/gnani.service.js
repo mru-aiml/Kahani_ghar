@@ -37,10 +37,42 @@ export async function synthesizeSpeech({ text, voice, language }) {
 
 export async function generateGroqCompletion(messages) {
   requireEnv("GROQ_API_KEY", env.groq.apiKey);
+  // GPT-OSS supports Groq's strict structured-output mode. Requiring the
+  // complete story shape avoids JSON-mode validation errors and malformed
+  // model responses reaching the story parser.
+  const storySchema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["title", "characters", "moral", "scenes"],
+    properties: {
+      title: { type: "string" },
+      characters: { type: "array", items: { type: "string" } },
+      moral: { type: "string" },
+      scenes: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["idx", "text", "choices"],
+          properties: {
+            idx: { type: "integer" },
+            text: { type: "string" },
+            choices: { anyOf: [{ type: "array", items: { type: "string" } }, { type: "null" }] }
+          }
+        }
+      }
+    }
+  };
   const response = await checkedFetch(`${env.groq.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.groq.apiKey}` },
-    body: JSON.stringify({ model: env.groq.model, messages, temperature: 0.7, response_format: { type: "json_object" } })
+    body: JSON.stringify({
+      model: env.groq.model,
+      messages,
+      temperature: 0.7,
+      reasoning_effort: "low",
+      response_format: { type: "json_schema", json_schema: { name: "children_story", strict: true, schema: storySchema } }
+    })
   }, "Groq");
   const body = await response.json();
   const content = body.choices?.[0]?.message?.content;

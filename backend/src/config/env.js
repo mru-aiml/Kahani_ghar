@@ -18,7 +18,7 @@ export const env = {
     // continue to work after the provider name is corrected to Groq.
     apiKey: process.env.GROQ_API_KEY || process.env.XAI_API_KEY || "",
     baseUrl: (process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/$/, ""),
-    model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile"
+    model: process.env.GROQ_MODEL || "openai/gpt-oss-120b"
   }
 };
 

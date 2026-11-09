@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["turbopack:///[next]/internal/font/google/baloo_2_3c31dd8c.module.css"],"sourcesContent":["@font-face {\n    font-family: 'Baloo 2 Fallback';\n    src: local(\"Arial\");\n    ascent-override: 112.55%;\ndescent-override: 54.71%;\nline-gap-override: 0.00%;\nsize-adjust: 95.78%;\n\n}\n.className {\n    font-family: 'Baloo 2', 'Baloo 2 Fallback';\n    font-style: normal;\n\n}\n.variable {\n    --font-baloo2: 'Baloo 2', 'Baloo 2 Fallback';\n}\n"],"names":[],"mappings":"AAAA;;;;;;;;;AASA;;;;;AAKA","ignoreList":[0]}}]
+}

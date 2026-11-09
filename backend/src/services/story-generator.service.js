@@ -4,7 +4,14 @@ import { httpError } from "../utils/api.js";
 
 const safety = "Keep this age-appropriate: no violence, fear, adult themes, brands, or real people outside the family. End warmly and happily.";
 function parseStory(content) {
-  try { return storyStructureSchema.parse(JSON.parse(content.replace(/^```json\s*|\s*```$/g, ""))); }
+  try {
+    const story = JSON.parse(content.replace(/^```json\s*|\s*```$/g, ""));
+    // Strict structured outputs represent the optional field as null.
+    story.scenes = story.scenes.map(({ choices, ...scene }) =>
+      choices === null ? scene : { ...scene, choices }
+    );
+    return storyStructureSchema.parse(story);
+  }
   catch { throw httpError(502, "LLM_INVALID_RESPONSE", "Groq did not return a valid story."); }
 }
 
