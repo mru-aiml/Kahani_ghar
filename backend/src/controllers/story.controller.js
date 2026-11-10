@@ -36,9 +36,12 @@ export async function branchStory(req, res) {
   const story = await ownedStory(req.params.id, req.user.id);
   if (story.branchCount >= 3) throw httpError(400, "BRANCH_LIMIT_REACHED", "This story has reached its three-choice limit.");
   const generated = await createBranch({ story, choice });
+  const existingSceneCount = story.structure.scenes.length;
   story.structure.scenes.push(...generated.scenes);
   story.structure.moral = generated.moral || story.structure.moral;
   story.branchCount += 1;
   await story.save();
-  return success(res, { scenes: generated.scenes });
+  // Return the persisted scenes so their generated UUIDs are sent to the
+  // frontend. Returning the LLM payload would discard the database IDs.
+  return success(res, { scenes: story.structure.scenes.slice(existingSceneCount) });
 }
