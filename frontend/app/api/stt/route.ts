@@ -3,7 +3,7 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/lib/api/errors";
 import { getRouteAuth, requireRouteOrigin } from "@/lib/api/auth";
-import { SttRequestFieldsSchema, SttResponseSchema, AUDIO_LIMITS, validateAudioFile } from "@/lib/api/schemas";
+import { SttRequestFieldsSchema, validateAudioFile } from "@/lib/api/schemas";
 import { transcribe } from "@/lib/gnani/stt";
 import { createRecording } from "@/lib/db/queries";
 import { uploadToStorage } from "@/lib/db/queries";
@@ -18,7 +18,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   validateGnaniEnv();
 
   await requireRouteOrigin(request);
-  const { familyId, memberId } = await getRouteAuth();
+  const { memberId } = await getRouteAuth();
 
   // Parse multipart form data
   const formData = await request.formData();

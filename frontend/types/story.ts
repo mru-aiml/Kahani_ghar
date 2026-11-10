@@ -6,6 +6,8 @@ export type StoryKind = "memory" | "folklore" | "generated";
 export type StoryLanguage = "hi-IN" | "en-IN" | "hi-en" | "mr-IN" | "ta-IN" | "te-IN";
 
 export interface StoryScene {
+  /** Scene UUID from the backend (present for persisted stories). */
+  id?: string;
   idx: number;
   text: string;
   /** 2-3 choices when present (enforced by LLM schema) */

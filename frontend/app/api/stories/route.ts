@@ -81,7 +81,18 @@ export const POST = withErrorHandling(async (request: NextRequest): Promise<Resp
     choicePrompt: s.choices ? "What happens next?" : null,
     choices: s.choices || null,
   }));
-  await createScenes(scenes);
+  const createdScenes = await createScenes(scenes);
+
+  // Attach persisted scene UUIDs to the returned structure so the client can
+  // address individual scenes (e.g. for TTS caching).
+  const sceneIdByIdx = new Map(createdScenes.map((s) => [s.idx, s.id]));
+  const structureWithSceneIds = {
+    ...structure,
+    scenes: structure.scenes.map((s) => ({
+      ...s,
+      id: sceneIdByIdx.get(s.idx),
+    })),
+  };
 
   // Return response (without audioUrl - TTS is on-demand)
   return Response.json(
@@ -96,7 +107,7 @@ export const POST = withErrorHandling(async (request: NextRequest): Promise<Resp
         childNickname: input.child.nickname,
         interests: input.child.interests,
         narrator: "Family", // TODO: Get member display name
-        structure,
+        structure: structureWithSceneIds,
         createdAt: story.created_at,
       },
     },

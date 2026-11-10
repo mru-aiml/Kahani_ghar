@@ -6,6 +6,7 @@ import { z } from "zod";
 export const AgeBandSchema = z.enum(["3-5", "6-8", "9-10"]);
 
 export const StorySceneSchema = z.object({
+  id: z.string().uuid().optional(),
   idx: z.number().int().nonnegative(),
   text: z.string().min(1),
   choices: z.array(z.string().min(1)).min(2).max(3).optional(),
@@ -15,7 +16,7 @@ export const StoryStructureSchema = z.object({
   title: z.string().min(1),
   characters: z.array(z.string().min(1)).min(1),
   moral: z.string().min(1),
-  scenes: z.array(StorySceneSchema).min(5).max(8),
+  scenes: z.array(StorySceneSchema).min(1).max(8),
   interests: z.array(z.string()).default([]),
 });
 

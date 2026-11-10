@@ -304,8 +304,8 @@ export async function listStories(params: {
     .range(params.offset, params.offset + params.limit - 1);
 
   if (params.query?.trim()) {
-    const q = params.query.trim();
-    query = query.or(`title.ilike.%${q}%,child_nickname.ilike.%${q}%,narrator.ilike.%${q}%`);
+    const q = params.query.trim().replace(/[%_,]/g, "");
+    if (q) query = query.or(`title.ilike.%${q}%`);
   }
   if (params.language && params.language !== "all") {
     query = query.eq("language", params.language);

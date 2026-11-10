@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { StoryScene } from "@/types/story";
 import { ApiError, apiClient } from "@/lib/services/api-client";
+import { apiStoryService } from "@/lib/services/api-story-service";
 
 interface ChoiceCardsProps {
   choices: string[];
@@ -18,11 +19,7 @@ interface ChoiceCardsProps {
 export default function ChoiceCards({
   choices,
   storyId,
-  storySoFar: _storySoFar,
-  language: _language,
-  childNickname: _childNickname,
-  ageBand: _ageBand,
-  interests: _interests,
+  storySoFar,
   onSelect,
 }: ChoiceCardsProps) {
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -36,14 +33,21 @@ export default function ChoiceCards({
   const handleChoice = async (choice: string) => {
     setIsBranching(true);
     setBranchError(null);
-    
+
+    const isMockMode = process.env.NEXT_PUBLIC_SERVICE_MODE !== "api";
+
     try {
-      const result = await apiClient.post<{ success: true; data: { scenes: StoryScene[] } }>(
-        `/stories/${storyId}/branch`,
-        { choice },
-        { timeout: 90_000 },
-      );
-      const newScenes = result.data.scenes;
+      if (isMockMode) {
+        // Demo-only simulation so the UI stays usable without a backend.
+        const mockScene: StoryScene = {
+          idx: storySoFar.length,
+          text: `Because you chose "${choice}", the story took a gentle new turn and ended with a warm hug.`,
+        };
+        onSelect(choice, [mockScene]);
+        return;
+      }
+
+      const newScenes = await apiStoryService.branch(storyId, choice, storySoFar);
       onSelect(choice, newScenes);
     } catch (err) {
       const message = err instanceof ApiError && err.code === "NETWORK_ERROR"

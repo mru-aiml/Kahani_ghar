@@ -51,12 +51,25 @@ export default function AudioPlayer({ sceneCount, currentScene, onSceneChange, s
       await playAudio();
       return;
     }
+
+    const scene = scenes[currentScene];
+    const isMockMode = process.env.NEXT_PUBLIC_SERVICE_MODE !== "api";
+
+    if (isMockMode) {
+      setError("Narration requires the backend (API mode). Switch to API mode to hear the story.");
+      return;
+    }
+    if (!scene?.id) {
+      setError("This story has no scene id for narration. Regenerate it in API mode.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const result = await apiClient.post<{ success: true; data: { audioUrl: string } }>(
         "/tts",
-        { storyId, sceneIndex: currentScene, voice, language, text: scenes[currentScene].text },
+        { text: scene.text, voice, language, sceneId: scene.id, storyId },
         { timeout: 60_000 }
       );
       setAudioUrl(result.data.audioUrl);

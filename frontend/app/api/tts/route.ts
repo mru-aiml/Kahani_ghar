@@ -3,7 +3,7 @@
 import { NextRequest } from "next/server";
 import { withErrorHandling } from "@/lib/api/errors";
 import { getRouteAuth, requireRouteOrigin, parseJsonBodyOrThrow } from "@/lib/api/auth";
-import { TtsRequestSchema, TtsResponseSchema } from "@/lib/api/schemas";
+import { TtsRequestSchema } from "@/lib/api/schemas";
 import { synthesize, ttsCacheKey } from "@/lib/gnani/tts";
 import { getStoryByIdForFamily, getScenesByStoryId, assertVoiceOfFamily, getVoiceByIdForTts, updateSceneAudioPath } from "@/lib/db/queries";
 import { uploadToStorage, signedStorageUrl } from "@/lib/db/queries";

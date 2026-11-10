@@ -74,6 +74,7 @@ export const GET = withErrorHandling(async (
       characters: structure?.characters || [],
       moral: structure?.moral || "",
       scenes: scenes.map((s) => ({
+        id: s.id,
         idx: s.idx,
         text: s.text,
         choices: s.choices || undefined,
@@ -217,30 +218,32 @@ export const POST = withErrorHandling(async (
     );
   }
 
-  // Persist new scenes (only the newly generated ones)
-  const existingMaxIdx = Math.max(...existingScenes.map((s) => s.idx));
-  const newScenes = newStructure.scenes
-    .filter((s) => s.idx > existingMaxIdx)
-    .map((s) => ({
-      storyId,
-      idx: s.idx,
-      text: s.text,
-      choicePrompt: s.choices ? "What happens next?" : null,
-      choices: s.choices || null,
-    }));
+  // Persist new scenes (only the newly generated ones).
+  // The model may return continuing idxs or restart from 0, so normalise them
+  // to follow the existing scenes.
+  const existingMaxIdx = existingScenes.length
+    ? Math.max(...existingScenes.map((s) => s.idx))
+    : -1;
+  const candidateScenes = newStructure.scenes.filter((s) => s.idx > existingMaxIdx);
+  const toPersist = candidateScenes.length > 0 ? candidateScenes : newStructure.scenes;
 
-  if (newScenes.length > 0) {
-    await createScenes(newScenes);
-  }
+  const newScenes = toPersist.map((s, i) => ({
+    storyId,
+    idx: existingMaxIdx + 1 + i,
+    text: s.text,
+    choicePrompt: s.choices ? "What happens next?" : null,
+    choices: s.choices || null,
+  }));
 
-  // Return only the new scenes
-  const responseScenes = newStructure.scenes
-    .filter((s) => s.idx > existingMaxIdx)
-    .map((s) => ({
-      idx: s.idx,
-      text: s.text,
-      choices: s.choices || undefined,
-    }));
+  const createdScenes = newScenes.length > 0 ? await createScenes(newScenes) : [];
+
+  // Return only the new scenes, with their persisted UUIDs.
+  const responseScenes = newScenes.map((s, i) => ({
+    id: createdScenes[i]?.id,
+    idx: s.idx,
+    text: s.text,
+    choices: toPersist[i].choices || undefined,
+  }));
 
   return Response.json(
     { success: true, data: { scenes: responseScenes } },

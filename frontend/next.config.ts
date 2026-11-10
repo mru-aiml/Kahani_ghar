@@ -4,7 +4,11 @@ const nextConfig: NextConfig = {
   // Keep this frontend's build output separate from stale Next dev state.
   distDir: ".next-frontend-3100",
   /* config options here */
-  allowedDevOrigins: ["192.168.1.6"],
+  // LAN dev origins are intentionally NOT hardcoded. Add your machine's LAN IP
+  // (or set NEXT_ALLOWED_DEV_ORIGINS=ip1,ip2) when testing from another device.
+  allowedDevOrigins: process.env.NEXT_ALLOWED_DEV_ORIGINS
+    ? process.env.NEXT_ALLOWED_DEV_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
+    : [],
   turbopack: {
     rules: {
       "*.css": {
