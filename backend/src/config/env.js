@@ -1,8 +1,14 @@
 import "dotenv/config";
 
+const configuredClientOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:3100")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
 export const env = {
   port: Number(process.env.PORT || 5000),
-  clientOrigin: process.env.CLIENT_ORIGIN || "http://localhost:3100",
+  clientOrigin: configuredClientOrigins[0] || "http://localhost:3100",
+  clientOrigins: configuredClientOrigins,
   mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/kahanighar",
   demoUserId: process.env.DEMO_USER_ID || "local-family",
   allowDemoAuth: process.env.ALLOW_DEMO_AUTH === "true",
