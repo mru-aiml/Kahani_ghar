@@ -24,7 +24,26 @@ export interface ApiClientOptions {
 }
 
 const DEFAULT_TIMEOUT = 30_000;
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+
+/**
+ * Normalize the configured API base URL.
+ *
+ * Vercel deployments have been configured with the Render origin only
+ * (for example `https://kahani-ghar.onrender.com`), which caused requests such
+ * as `/stories` to miss the backend's `/api` prefix. Accept both forms and
+ * always return a base URL ending in `/api`, without creating `/api/api`.
+ */
+export function normalizeApiBaseUrl(raw: string | undefined): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "/api";
+
+  const withoutTrailingSlash = value.replace(/\/+$/, "");
+  if (!withoutTrailingSlash || withoutTrailingSlash === "/") return "/api";
+  if (withoutTrailingSlash.endsWith("/api")) return withoutTrailingSlash;
+  return `${withoutTrailingSlash}/api`;
+}
+
+const DEFAULT_BASE_URL = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
 
 export function createApiClient(options: ApiClientOptions = {}) {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
