@@ -4,6 +4,25 @@
 // brands/people), and the instruction to keep factual details from a spoken
 // memory unchanged.
 
+function languageInstruction(language: string): string {
+  switch (language) {
+    case "hi-IN":
+      return "Write the complete story in Hindi using Devanagari script. Do not use English except for unavoidable names.";
+    case "en-IN":
+      return "Write the complete story in English. Do not use Hindi or any other language.";
+    case "hi-en":
+      return "Write the complete story in natural Hinglish, mixing Hindi and English conversationally in Roman script. Do not produce entirely Hindi or entirely English.";
+    case "mr-IN":
+      return "Write the complete story in Marathi using Devanagari script. Do not use Hindi or English except for unavoidable names.";
+    case "ta-IN":
+      return "Write the complete story in Tamil using Tamil script.";
+    case "te-IN":
+      return "Write the complete story in Telugu using Telugu script.";
+    default:
+      return `Write the complete story in ${language}.`;
+  }
+}
+
 const SAFETY_RULES = `Safety rules (must follow):
 - Age-appropriate content only. No violence, no frightening endings for children under 6.
 - No adult themes, no real brands, no real people other than the family member telling the memory.
@@ -22,7 +41,8 @@ export function buildGenerateSystemPrompt(params: {
     ? `The child loves: ${params.interests.join(", ")}.`
     : "";
   return `You are KahaniGhar, a warm storyteller for Indian families.
-Write a children's story in ${params.language} (use the native script; do not romanize).
+${languageInstruction(params.language)}
+The title, characters, moral, and every scene text must all follow this language.
 Personalize for a child nicknamed "${params.childNickname}", age band ${params.ageBand}.
 ${interestLine}
 Story kind: ${params.kind} (memory = keep the narrator's original facts; folklore = traditional tale; generated = fresh).
@@ -47,7 +67,9 @@ export function buildBranchSystemPrompt(params: {
   const interestLine = params.interests.length
     ? `The child loves: ${params.interests.join(", ")}.`
     : "";
-  return `You are KahaniGhar, continuing an interactive children's story in ${params.language} (native script).
+  return `You are KahaniGhar, continuing an interactive children's story.
+${languageInstruction(params.language)}
+The title, characters, moral, and every new scene text must all follow this language.
 Child: "${params.childNickname}", age band ${params.ageBand}. ${interestLine}
 The child just made a choice. Continue the story with 1-2 new scenes that reflect that choice.
 Always move toward a happy, gentle ending. Hard limit: at most 3 decision points total, then a final scene with a moral.

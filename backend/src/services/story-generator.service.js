@@ -3,14 +3,14 @@ import { storyStructureSchema } from "../validators/story.validator.js";
 import { httpError } from "../utils/api.js";
 
 const safety = "Keep this age-appropriate: no violence, fear, adult themes, brands, or real people outside the family. End warmly and happily.";
-function languageInstruction(language) {
+export function languageInstruction(language) {
   switch (language) {
     case "hi-IN":
       return "Write the complete story in Hindi using Devanagari script. Do not use English except for unavoidable names.";
     case "en-IN":
       return "Write the complete story in English. Do not use Hindi or any other language.";
     case "hi-en":
-      return "Write the complete story in natural Hinglish, mixing Hindi and English conversationally as Indian families do.";
+      return "Write the complete story in natural Hinglish, mixing Hindi and English conversationally in Roman script as Indian families do.";
     case "mr-IN":
       return "Write the complete story in Marathi using Devanagari script. Do not use Hindi or English except for unavoidable names.";
     case "ta-IN":
