@@ -249,6 +249,8 @@ function CreatePageContent() {
                   onRecordingComplete={handleRecordingComplete}
                   maxDurationSeconds={30}
                   maxSizeBytes={5 * 1024 * 1024}
+                  isProcessing={loading}
+                  processingLabel="Transcribing your recording..."
                 />
               ) : (
                 <div className="mt-6">

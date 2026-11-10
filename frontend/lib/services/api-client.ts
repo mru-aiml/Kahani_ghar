@@ -68,11 +68,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
       } catch {
         // The backend will use DEMO_USER_ID only when ALLOW_DEMO_AUTH=true.
       }
+      const isFormData = fetchInit.body instanceof FormData;
       const response = await fetch(`${baseUrl}${path}`, {
         ...fetchInit,
         signal: controller.signal,
         headers: {
-          "Content-Type": "application/json",
+          ...(isFormData ? {} : { "Content-Type": "application/json" }),
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           ...fetchInit.headers,
         },
@@ -80,23 +81,44 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
       clearTimeout(timeoutId);
 
-      // Parse JSON response
-      let data: unknown;
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
+      // Parse JSON response only when the server actually returned JSON.
+      // HTML, plain-text, or empty responses are converted into a safe
+      // diagnostic error instead of crashing JSON.parse.
+      let data: unknown = null;
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
+      } else {
+        const text = await response.text();
+        const diagnostic = text.trim().slice(0, 200);
+        if (response.ok) {
+          throw new ApiError(
+            "INVALID_RESPONSE",
+            response.status,
+            false,
+            { body: diagnostic }
+          );
+        }
+        if (diagnostic) {
+          // Preserve a short diagnostic for non-JSON error responses.
+          (response as Response & { __diagnostic?: string }).__diagnostic = diagnostic;
+        }
       }
 
       if (!response.ok) {
         const errorResponse = data as ApiErrorResponse | null;
+        const diagnostic = (response as Response & { __diagnostic?: string }).__diagnostic;
         const error = new ApiError(
           errorResponse?.error?.code ?? `HTTP_${response.status}`,
           response.status,
           response.status === 429 || response.status >= 500,
-          errorResponse?.error?.details
+          errorResponse?.error?.details ?? (diagnostic ? { body: diagnostic } : undefined)
         );
-        error.message = errorResponse?.error?.message ?? response.statusText;
+        error.message = errorResponse?.error?.message ?? (diagnostic ? `Unexpected response: ${diagnostic}` : response.statusText);
 
         // Handle auth errors
         if (response.status === 401) {

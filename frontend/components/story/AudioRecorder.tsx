@@ -1,24 +1,42 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface AudioRecorderProps {
   onRecordingComplete: (audioBlob: Blob, duration: number) => void;
   onError?: (error: string) => void;
   maxDurationSeconds?: number;
   maxSizeBytes?: number;
+  isProcessing?: boolean;
+  processingLabel?: string;
 }
 
-const MAX_DURATION_SECONDS = 30;
-const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const DEFAULT_MAX_DURATION_SECONDS = 30;
+const DEFAULT_MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+type RecorderState = "idle" | "recording" | "paused" | "preview";
+
+function getSupportedMimeType(): string {
+  if (typeof MediaRecorder === "undefined") return "";
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/ogg",
+    "audio/mp4",
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+}
 
 export default function AudioRecorder({
   onRecordingComplete,
   onError,
-  maxDurationSeconds = MAX_DURATION_SECONDS,
-  maxSizeBytes = MAX_SIZE_BYTES,
+  maxDurationSeconds = DEFAULT_MAX_DURATION_SECONDS,
+  maxSizeBytes = DEFAULT_MAX_SIZE_BYTES,
+  isProcessing = false,
+  processingLabel = "Transcribing...",
 }: AudioRecorderProps) {
-  const [state, setState] = useState<"idle" | "recording" | "paused" | "preview">("idle");
+  const [state, setState] = useState<RecorderState>("idle");
   const [duration, setDuration] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -29,18 +47,25 @@ export default function AudioRecorder({
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
-  const pausedTimeRef = useRef(0);
+  const pausedDurationRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
+  const mimeTypeRef = useRef<string>("");
 
-  const cleanup = useCallback(() => {
+  const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }, []);
+
+  const stopTracks = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+  }, []);
+
+  const revokeAudioUrl = useCallback(() => {
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
@@ -48,18 +73,53 @@ export default function AudioRecorder({
   }, [audioUrl]);
 
   const reset = useCallback(() => {
-    cleanup();
+    stopTimer();
+    stopTracks();
+    revokeAudioUrl();
+    mediaRecorderRef.current = null;
+    chunksRef.current = [];
+    mimeTypeRef.current = "";
     setState("idle");
     setDuration(0);
     setAudioBlob(null);
     setError(null);
+    pausedDurationRef.current = 0;
     startTimeRef.current = 0;
-    pausedTimeRef.current = 0;
-    chunksRef.current = [];
-  }, [cleanup]);
+  }, [stopTimer, stopTracks, revokeAudioUrl]);
+
+  const startTimer = useCallback(() => {
+    stopTimer();
+    timerRef.current = setInterval(() => {
+      const elapsed = (Date.now() - startTimeRef.current) / 1000 + pausedDurationRef.current;
+      setDuration(elapsed);
+      if (elapsed >= maxDurationSeconds) {
+        stopRecording();
+      }
+    }, 100);
+  }, [maxDurationSeconds, stopTimer]);
 
   const startRecording = async () => {
     setError(null);
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setError("Your browser does not support microphone recording.");
+      onError?.("Your browser does not support microphone recording.");
+      return;
+    }
+
+    if (typeof MediaRecorder === "undefined") {
+      setError("Your browser does not support audio recording.");
+      onError?.("Your browser does not support audio recording.");
+      return;
+    }
+
+    const mimeType = getSupportedMimeType();
+    if (!mimeType) {
+      setError("No supported audio recording format was found in this browser.");
+      onError?.("No supported audio recording format was found in this browser.");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -70,116 +130,133 @@ export default function AudioRecorder({
       });
       setMicPermission("granted");
       streamRef.current = stream;
-
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
-      });
-      mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
+      mimeTypeRef.current = mimeType;
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm;codecs=opus" });
-        if (blob.size > 0) {
-          setAudioBlob(blob);
-          const url = URL.createObjectURL(blob);
-          setAudioUrl(url);
-          setState("preview");
-        } else {
+        stopTimer();
+        stopTracks();
+        const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || mimeType });
+        if (blob.size <= 0) {
           setError("Recording is empty. Please try again.");
           setState("idle");
+          onError?.("Recording is empty. Please try again.");
+          return;
         }
-        cleanup();
+        if (blob.size > maxSizeBytes) {
+          setError(`Recording is too large (${Math.round(blob.size / 1024)} KB). Maximum size is ${Math.round(maxSizeBytes / 1024)} KB.`);
+          setState("idle");
+          onError?.(`Recording is too large (${Math.round(blob.size / 1024)} KB). Maximum size is ${Math.round(maxSizeBytes / 1024)} KB.`);
+          return;
+        }
+        setAudioBlob(blob);
+        revokeAudioUrl();
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+        setState("preview");
+      };
+
+      mediaRecorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+        setError("Recording failed. Please try again.");
+        onError?.("Recording failed. Please try again.");
+        stopRecording();
       };
 
       mediaRecorder.start(100);
+      chunksRef.current = [];
+      pausedDurationRef.current = 0;
+      startTimeRef.current = Date.now();
       setState("recording");
-      // eslint-disable-next-line react-hooks/purity
-      startTimeRef.current = Date.now() - pausedTimeRef.current;
-
-      timerRef.current = setInterval(() => {
-        // eslint-disable-next-line react-hooks/purity
-        setDuration((Date.now() - startTimeRef.current) / 1000);
-      }, 100);
-
-      mediaRecorder.onerror = (e) => {
-        console.error("MediaRecorder error:", e);
-        setError("Recording failed. Please try again.");
-        stopRecording();
-      };
+      startTimer();
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         setMicPermission("denied");
         setError("Microphone access denied. Please allow microphone access in your browser settings.");
+        onError?.("Microphone access denied. Please allow microphone access in your browser settings.");
       } else if (err instanceof DOMException && err.name === "NotFoundError") {
         setError("No microphone found. Please connect a microphone and try again.");
+        onError?.("No microphone found. Please connect a microphone and try again.");
       } else {
         console.error("Recording error:", err);
         setError("Failed to start recording. Please try again.");
+        onError?.("Failed to start recording. Please try again.");
       }
       setState("idle");
+      stopTracks();
     }
   };
 
   const pauseRecording = () => {
     if (mediaRecorderRef.current && state === "recording") {
-      mediaRecorderRef.current.pause();
-      // eslint-disable-next-line react-hooks/purity
-      pausedTimeRef.current = Date.now() - startTimeRef.current;
-      setState("paused");
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      try {
+        mediaRecorderRef.current.pause();
+        pausedDurationRef.current += (Date.now() - startTimeRef.current) / 1000;
+        stopTimer();
+        setState("paused");
+      } catch (err) {
+        console.error("Pause error:", err);
+        setError("Could not pause recording.");
       }
     }
   };
 
   const resumeRecording = () => {
     if (mediaRecorderRef.current && state === "paused") {
-      mediaRecorderRef.current.resume();
-      // eslint-disable-next-line react-hooks/purity
-      startTimeRef.current = Date.now() - pausedTimeRef.current;
-      setState("recording");
-      timerRef.current = setInterval(() => {
-        // eslint-disable-next-line react-hooks/purity
-        setDuration((Date.now() - startTimeRef.current) / 1000);
-      }, 100);
+      try {
+        mediaRecorderRef.current.resume();
+        startTimeRef.current = Date.now();
+        setState("recording");
+        startTimer();
+      } catch (err) {
+        console.error("Resume error:", err);
+        setError("Could not resume recording.");
+      }
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && (state === "recording" || state === "paused")) {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.error("Stop error:", err);
+        setError("Could not stop recording.");
+      }
     }
   };
 
   const discardRecording = () => {
-    cleanup();
-    setState("idle");
-    setDuration(0);
-    setAudioBlob(null);
-    pausedTimeRef.current = 0;
+    reset();
   };
 
   const handleConfirm = () => {
     if (audioBlob && audioBlob.size > 0) {
       if (audioBlob.size > maxSizeBytes) {
         setError(`Recording is too large (${Math.round(audioBlob.size / 1024)} KB). Maximum size is ${Math.round(maxSizeBytes / 1024)} KB.`);
+        onError?.(`Recording is too large (${Math.round(audioBlob.size / 1024)} KB). Maximum size is ${Math.round(maxSizeBytes / 1024)} KB.`);
         return;
       }
       onRecordingComplete(audioBlob, duration);
-      reset();
     }
   };
 
   useEffect(() => {
-    return () => cleanup();
-  }, [cleanup]);
+    return () => {
+      stopTimer();
+      stopTracks();
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, [stopTimer, stopTracks, audioUrl]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -208,6 +285,12 @@ export default function AudioRecorder({
         </div>
       )}
 
+      {isProcessing && (
+        <div className="mb-4 p-3 rounded-lg bg-kg-teal/10 border border-kg-teal/20 text-sm text-kg-teal" role="status">
+          {processingLabel}
+        </div>
+      )}
+
       {state === "idle" && (
         <div className="text-center py-8">
           <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-kg-teal/20">
@@ -216,14 +299,17 @@ export default function AudioRecorder({
             </svg>
           </div>
           <p className="text-kg-cream/60 mb-4">Tap the button below to start recording your memory</p>
-          <p className="text-xs text-kg-cream/40 mb-6">Maximum {Math.round(maxDurationSeconds / 60)} minute, max 5 MB</p>
+          <p className="text-xs text-kg-cream/40 mb-6">Maximum {maxDurationSeconds} seconds, max 5 MB</p>
           <button
             onClick={startRecording}
-            disabled={micPermission === "denied"}
-            className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-kg-amber text-kg-night text-2xl focus:outline-none focus:ring-2 focus:ring-kg-amber focus:ring-offset-2 focus:ring-offset-kg-night transition-transform hover:scale-105 active:scale-95"
+            disabled={micPermission === "denied" || isProcessing}
+            className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-kg-amber text-kg-night text-2xl focus:outline-none focus:ring-2 focus:ring-kg-amber focus:ring-offset-2 focus:ring-offset-kg-night transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
             aria-label="Start recording"
           >
-            🎙
+            <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+            </svg>
           </button>
         </div>
       )}
@@ -235,7 +321,6 @@ export default function AudioRecorder({
             <div className="absolute inset-0 flex h-20 w-20 items-center justify-center">
               <svg className="h-10 w-10 text-kg-danger animate-pulse" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                <path fillRule="evenodd" d="M9 15c0 1.66 1.34 3 3 3h6c1.66 0 3-1.34 3-3v-2H9v2zm9-6c0 1.11-.89 2-2 2s-2-.89-2-2H9c0 1.11.89 2 2 2h10zm-6 8c1.11 0 2-.89 2-2s-.89-2-2-2H9c-1.11 0-2 .89-2 2v2h10v-2z" clipRule="evenodd" />
               </svg>
             </div>
           </div>
@@ -255,7 +340,7 @@ export default function AudioRecorder({
               aria-label="Stop recording"
             >
               <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                <path d="M6 6h12v12H6z" />
               </svg>
             </button>
           </div>
@@ -277,7 +362,7 @@ export default function AudioRecorder({
               aria-label="Resume recording"
             >
               <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 4v16h4V4H6zm8 0v16h4V4h-4z" />
+                <path d="M8 5v14l11-7z" />
               </svg>
             </button>
             <button
@@ -286,7 +371,7 @@ export default function AudioRecorder({
               aria-label="Stop and save recording"
             >
               <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                <path d="M6 6h12v12H6z" />
               </svg>
             </button>
             <button
@@ -312,7 +397,7 @@ export default function AudioRecorder({
           <p className="text-kg-cream/60 mb-4">Preview your recording</p>
           <audio controls className="w-full max-w-xs mx-auto mb-4" src={audioUrl} />
           <div className="text-sm text-kg-cream/50 mb-4">
-            Duration: {formatTime(duration)} • Size: {Math.round((audioBlob?.size || 0) / 1024)} KB
+            Duration: {formatTime(duration)}  Size: {Math.round((audioBlob?.size || 0) / 1024)} KB
           </div>
           <div className="flex gap-3 justify-center">
             <button
@@ -326,7 +411,8 @@ export default function AudioRecorder({
             </button>
             <button
               onClick={handleConfirm}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-kg-amber text-kg-night focus:outline-none focus:ring-2 focus:ring-kg-amber focus:ring-offset-2 focus:ring-offset-kg-night"
+              disabled={isProcessing}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-kg-amber text-kg-night focus:outline-none focus:ring-2 focus:ring-kg-amber focus:ring-offset-2 focus:ring-offset-kg-night disabled:opacity-50"
               aria-label="Use this recording"
             >
               <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -338,7 +424,7 @@ export default function AudioRecorder({
       )}
 
       <p className="mt-4 text-xs text-center text-kg-cream/40">
-        Maximum {Math.round(maxDurationSeconds / 60)} minute recording • Maximum 5 MB • Audio recorded in browser
+        Maximum {maxDurationSeconds} seconds, max 5 MB. Audio recorded in browser.
       </p>
     </div>
   );

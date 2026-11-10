@@ -26,8 +26,15 @@ export class SttService {
   private basePath = "/stt";
 
   async transcribe(audioBlob: Blob, options: Partial<SttOptions> = {}): Promise<SttResult> {
+    const extension = audioBlob.type.includes("ogg")
+      ? "ogg"
+      : audioBlob.type.includes("mp4")
+        ? "m4a"
+        : audioBlob.type.includes("wav")
+          ? "wav"
+          : "webm";
     const formData = new FormData();
-    formData.append("audio_file", audioBlob, "recording.wav");
+    formData.append("audio_file", audioBlob, `recording.${extension}`);
 
     if (options.languageCode) formData.append("language_code", options.languageCode);
     if (options.model) formData.append("model", options.model);
