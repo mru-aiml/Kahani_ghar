@@ -136,7 +136,7 @@ function StoryReaderContent() {
           ← Storybook
         </Link>
         <span className="rounded-full bg-kg-amber/20 px-3 py-1 text-xs text-kg-amber">
-          {LANGUAGE_LABELS[story.language]}
+          {LANGUAGE_LABELS[story.language] ?? story.language}
         </span>
       </div>
       <h1 className="font-heading text-2xl text-kg-cream">{story.title}</h1>

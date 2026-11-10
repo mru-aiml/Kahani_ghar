@@ -19,10 +19,20 @@ export async function tts(req, res) {
   // API-created stories are resolved from MongoDB. Local demo stories have a
   // browser-generated id, so their scene text is sent explicitly instead.
   const story = input.text ? null : await ownedStory(input.storyId, req.user.id);
-  const sceneText = input.text || story?.structure.scenes[input.sceneIndex]?.text;
+  let scene = null;
+  if (!input.text && story) {
+    if (input.sceneId) {
+      scene = story.structure.scenes.find((candidate) => candidate.id === input.sceneId);
+      if (!scene) throw httpError(404, "NOT_FOUND", "Scene not found.");
+    } else {
+      scene = story.structure.scenes[input.sceneIndex ?? 0];
+    }
+  }
+  const sceneText = input.text || scene?.text;
   if (!sceneText) throw httpError(404, "NOT_FOUND", "Scene not found.");
   await fs.mkdir(audioDirectory, { recursive: true });
-  const key = crypto.createHash("sha256").update(`${input.storyId}:${input.sceneIndex}:${input.voice}:${input.language || story?.language}:${sceneText}`).digest("hex");
+  const sceneKey = input.sceneId || (input.sceneIndex ?? 0);
+  const key = crypto.createHash("sha256").update(`${input.storyId}:${sceneKey}:${input.voice}:${input.language || story?.language}:${sceneText}`).digest("hex");
   const filename = `${key}.wav`;
   const filepath = path.join(audioDirectory, filename);
   let cached = true;

@@ -1,6 +1,11 @@
+import crypto from "node:crypto";
 import mongoose from "mongoose";
 
 const sceneSchema = new mongoose.Schema({
+  // Stable UUID used by TTS caching and narration. Generated for every scene,
+  // including scenes created by branching, so narration never depends on array
+  // position alone.
+  id: { type: String, required: true, default: () => crypto.randomUUID() },
   idx: { type: Number, required: true },
   text: { type: String, required: true },
   choices: { type: [String], default: undefined },
